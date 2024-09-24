@@ -1,2 +1,5 @@
 # C-R-D-L
-Ethanol/N2O
+Ethanol/N2O rocket 
+Arduino
+Giblingsystem
+
