@@ -1,2 +1,2 @@
 # C-R-D-L
-Ethanol/N2O Rocked
+Ethanol/N2O
