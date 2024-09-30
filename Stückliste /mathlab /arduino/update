@@ -1,0 +1,209 @@
+
+1. Stückliste (Bill of Materials - BOM)
+Komponente	Anzahl	Material	Kosten pro Stück (€)	Gewicht (g)	Gesamtgewicht (g)	Materialstärke
+Kohlefaser-Rumpf (1,5m Länge, 10cm Durchmesser)	1	Kohlefaser	200	800	800	2mm
+Ethanol-Tank (ca. 70 ml)	1	Aluminium 7075	50	150	150	1,25 mm
+N₂O-Tank (ca. 250 ml, 50 bar)	1	Aluminium 7075	100	500	500	6,9 mm
+Injektor (Düse, 4,8 mm)	1	Edelstahl	20	50	50	-
+Aufklappbare Landebeine	4	Aluminium/Kohlefaser	25	100	400	2mm
+Mikrocontroller (Arduino Mega)	1	Elektronik	40	50	50	-
+GPS-Modul (z.B. Neo-6M)	1	Elektronik	25	25	25	-
+IMU-Sensor (z.B. MPU6050)	1	Elektronik	10	10	10	-
+Drucksensor (z.B. BMP180)	1	Elektronik	15	10	10	-
+Servos für Landebeine (20 kg/cm)	4	Elektronik/Metall	15	60	240	-
+2 Batterien (LiPo 11.1V 2200mAh)	1	Lithium-Polymer	30	180	180	-
+Schubdüse	1	Edelstahl	40	100	100	-
+Regler für Ventilsteuerung	1	Elektronik/Metall	50	70	70	-
+Verkabelung & Steckverbinder	-	Kupfer/Plastik	30	100	100	-
+Treibstoff (Ethanol, 500 ml)	1	Flüssigkeit	10	400	400	-
+Strukturteile (Schrauben, Muttern, Befestigungen)	-	Edelstahl	20	300	300	-
+Druckluftbehälter (zum Nachfüllen, optional)	1	Aluminium	80	500	500	-
+Gesamtkosten: ca. 800 €
+Gesamtgewicht: ca. 4035 g
+
+
+
+
+2. Installationsschema und Funktionsbeschreibung
+Das Installationsschema sollte alle Verbindungen und Komponenten umfassen. Dazu gehören die Treibstoffleitungen vom Ethanol- und N₂O-Tank zur Injektordüse, die Schubdüse, die Elektronik (Arduino, Sensoren, Batterien), und die Servos für die Landebeine.
+	• Ethanol- und N₂O-Tanks: Verbinden Sie die Tanks mit einem Hochdruckschlauch zum Injektor und sorgen Sie für ein Ventilsystem, das über den Arduino gesteuert wird. Verwenden Sie Regler, um den Druck zu steuern.
+	• Aufklappbare Landebeine: Befestigen Sie die Landebeine an der unteren Raketenstruktur mit Scharnieren, die durch Servos angetrieben werden. Diese sollten so programmiert werden, dass sie sich vor der Landung öffnen.
+	• Arduino Mega: Steuert alle Komponenten, inklusive der Landebeine, des Gimbaling-Systems, und des Treibstoffinjektors.
+	• Sensoren: Platzieren Sie den IMU- und GPS-Sensor im oberen Teil der Rakete für eine präzise Lageerkennung. Der Drucksensor sollte außen installiert werden, um den Luftdruck während des Flugs zu messen.
+
+1. Simulink-Schema-Zeichnung
+Das Simulink-Modell wird in verschiedene Subsysteme unterteilt, die die verschiedenen Komponenten und Funktionen der Rakete repräsentieren:
+a) Übersicht der Subsysteme:
+	1. Triebwerkssystem: Steuert den Ethanol- und N₂O-Fluss, die Schubkraft und die Brenndauer.
+	2. Navigations- und Lagesystem: GPS und IMU-Sensoren für die Flugbahnkontrolle.
+	3. Landungssystem: Steuert die Landebeine, basierend auf der Höhe und der Geschwindigkeit der Rakete.
+	4. Regelungssystem: Berechnet die Schubvektorsteuerung und gewährleistet eine stabile Flugbahn.
+	5. Höhen- und Geschwindigkeitsüberwachung: Drucksensor zur Höhenmessung und Berechnung der Geschwindigkeit.
+b) Aufbau des Simulink-Modells:
+	1. Triebwerkssystem:
+		○ Input: Ethanol- und N₂O-Durchflussregelung.
+		○ Output: Schubkraft.
+		○ Blöcke: PID-Regler für Durchflusskontrolle, Multiplikator für Schubberechnung.
+	2. Navigations- und Lagesystem:
+		○ Input: Daten vom GPS und IMU.
+		○ Output: Flugrichtung und Winkelkorrektur.
+		○ Blöcke: Kalman-Filter zur Verarbeitung der Sensor-Daten.
+	3. Landungssystem:
+		○ Input: Höhe (BMP180), Geschwindigkeit (Ableitung der Höhenänderung).
+		○ Output: Ausklappen der Landebeine.
+		○ Blöcke: IF-Block, der die Landebeine bei einer Höhe < 50 m aktiviert.
+	4. Regelungssystem:
+		○ Input: Daten aus dem Navigationssystem.
+		○ Output: Schubvektorsteuerung.
+		○ Blöcke: Servosimulation, die den Winkel des Schubvektors kontrolliert.
+	5. Höhen- und Geschwindigkeitsüberwachung:
+		○ Input: Drucksensor (BMP180).
+		○ Output: Höhe und Geschwindigkeit.
+		○ Blöcke: Differentiator für Geschwindigkeitsberechnung.
+In Simulink verbinden Sie alle diese Subsysteme durch Signalleitungen. Die Inputs und Outputs sollten klar definiert und miteinander verbunden sein.
+
+
+
+
+2. Genauerer Arduino-Code
+
+
+cpp
+Code kopieren
+#include <Servo.h>
+#include <Wire.h>
+#include <Adafruit_BMP085.h>
+#include <TinyGPS++.h>
+#include <MPU6050.h>
+// Servo Objekte
+Servo servo1, servo2, servo3, servo4;
+Adafruit_BMP085 bmp; // Drucksensor BMP180
+TinyGPSPlus gps;
+MPU6050 mpu;
+const int thrustValvePin = 8; // Pin für das Triebwerksventil
+float targetAltitude = 1000.0; // Zielhöhe in Metern
+// Initialisierung
+void setup() {
+  Serial.begin(9600);
+  Wire.begin();
+// Initialisierung der Sensoren
+  if (!bmp.begin()) {
+    Serial.println("Drucksensor konnte nicht gefunden werden.");
+    while (1) {}
+  }
+if (!mpu.begin()) {
+    Serial.println("IMU-Sensor konnte nicht initialisiert werden.");
+    while (1) {}
+  }
+// GPS Initialisierung
+  Serial1.begin(9600);
+// Servos initialisieren
+  servo1.attach(9);
+  servo2.attach(10);
+  servo3.attach(11);
+  servo4.attach(12);
+// Landebeine einklappen
+  servo1.write(0);
+  servo2.write(0);
+  servo3.write(0);
+  servo4.write(0);
+pinMode(thrustValvePin, OUTPUT);
+  digitalWrite(thrustValvePin, LOW);
+Serial.println("System bereit.");
+}
+void loop() {
+  // GPS-Daten verarbeiten
+  while (Serial1.available()) {
+    gps.encode(Serial1.read());
+  }
+// Höhe bestimmen
+  float currentAltitude = bmp.readAltitude();
+// Steuerung des Triebwerks
+  if (currentAltitude < targetAltitude) {
+    activateThrust();
+  } else {
+    deactivateThrust();
+  }
+// Daten des IMU-Sensors auslesen
+  float pitch = mpu.getPitch();
+  float roll = mpu.getRoll();
+  float yaw = mpu.getYaw();
+// Steuerung des Gimbaling-Systems basierend auf Lage
+  adjustThrustVector(pitch, roll);
+// Landung einleiten, wenn Höhe < 50 m
+  if (currentAltitude < 50) {
+    deployLandingLegs();
+  }
+delay(500); // Halbe Sekunde Wartezeit
+}
+void activateThrust() {
+  digitalWrite(thrustValvePin, HIGH);
+}
+void deactivateThrust() {
+  digitalWrite(thrustValvePin, LOW);
+}
+void deployLandingLegs() {
+  servo1.write(90);
+  servo2.write(90);
+  servo3.write(90);
+  servo4.write(90);
+}
+void adjustThrustVector(float pitch, float roll) {
+  // Schubvektor anpassen (Vektoren basierend auf Servoposition anpassen)
+  // Für einen präziseren Code müssen die Beziehungen zwischen Servoposition und
+  // Korrekturwinkel detailliert kalibriert werden.
+}
+3. MATLAB-Berechnungen (präziser)
+MATLAB-Code zur Berechnung der Flugbahn, Geschwindigkeit und Treibstoffverbrauch
+
+matlab
+Code kopieren
+% Gegebene Daten
+m0 = 4.035; % Anfangsgewicht der Rakete in kg
+F = 2000; % Schubkraft in N
+g = 9.81; % Erdbeschleunigung in m/s^2
+Isp = 250; % Spezifischer Impuls in Sekunden
+burn_time = 30; % Brenndauer in Sekunden
+dt = 0.1; % Zeitschritt in Sekunden
+% Berechnung der Anfangsbeschleunigung
+v = 0; % Startgeschwindigkeit
+h = 0; % Anfangshöhe
+m = m0; % Startgewicht
+% Berechnung der Flugbahn in Schleife
+time = 0:dt:burn_time;
+velocity = zeros(size(time));
+altitude = zeros(size(time));
+for i = 1:length(time)
+    % Berechnung der aktuellen Beschleunigung
+    F_thrust = F;
+    accel = (F_thrust / m) - g;
+    
+    % Aktualisierung von Geschwindigkeit und Höhe
+    v = v + accel * dt;
+    h = h + v * dt;
+    
+    % Aktualisierung des Treibstoffverbrauchs
+    m = m - (F / (Isp * g) * dt);
+    
+    % Speicherung der Ergebnisse
+    velocity(i) = v;
+    altitude(i) = h;
+end
+% Darstellung der Ergebnisse
+figure;
+subplot(2,1,1);
+plot(time, altitude);
+xlabel('Zeit (s)');
+ylabel('Höhe (m)');
+title('Flughöhe über die Zeit');
+subplot(2,1,2);
+plot(time, velocity);
+xlabel('Zeit (s)');
+ylabel('Geschwindigkeit (m/s)');
+title('Geschwindigkeit über die Zeit');
+
+
+4. Quellenangaben
+	• Rocket Propulsion Analysis Software: RPA
+	• Modeling and Simulation of Aerospace Vehicle Dynamics von Peter H. Zipfel
+	• Sensor-Datenblätter: Adafruit BMP180 (https://learn.adafruit.com/using-the-bmp085/overview), MPU6050 (https://invensense.tdk.com/products/motion-tracking/6-axis/mpu-6050/)
